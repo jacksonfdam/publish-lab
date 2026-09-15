@@ -3,14 +3,12 @@ import crypto from "node:crypto";
 import open from "open";
 import { listPosts, findPostBySlug, POSTS_DIR } from "./posts.js";
 import { renderIndex, renderPost, renderArticle, page, esc } from "./preview.js";
+import { publicAddress, DEFAULT_PORT, type PublicAddress } from "./address.js";
 import {
-  LINKEDIN_CALLBACK_PATH,
   buildLinkedInAuthUrl,
   completeLinkedInAuth,
   type TokenFile,
 } from "./linkedin/oauth.js";
-
-export const DEFAULT_PORT = 4000;
 
 export interface ServeOptions {
   port?: number;
@@ -26,41 +24,6 @@ export interface RunningServer {
   address: PublicAddress;
   /** Resolves when a provider finishes its flow through the callback route. */
   nextToken(): Promise<TokenFile>;
-}
-
-export interface PublicAddress {
-  /** What the browser and LinkedIn see. Differs from the bind address behind a proxy. */
-  origin: string;
-  /** Path the callback route is served on, taken from the redirect URI when one is set. */
-  callbackPath: string;
-  redirectUri: string;
-  proxied: boolean;
-}
-
-/**
- * Where this server is reachable from outside, which is not where it listens. A proxy that
- * terminates TLS for something like `https://publishlab.test` and forwards to a local port
- * means the browser never sees the bind address, so the redirect URI cannot be derived from
- * it. `PUBLIC_URL` declares the outside address; otherwise `LINKEDIN_REDIRECT_URI` implies
- * one, and a plain local run falls back to localhost on the bound port.
- */
-export function publicAddress(port: number): PublicAddress {
-  const configuredRedirect = process.env.LINKEDIN_REDIRECT_URI?.trim();
-  const configuredPublic = process.env.PUBLIC_URL?.trim();
-  const local = `http://localhost:${port}`;
-
-  let origin = local;
-  let callbackPath = LINKEDIN_CALLBACK_PATH;
-
-  if (configuredPublic) origin = new URL(configuredPublic).origin;
-
-  if (configuredRedirect) {
-    const parsed = new URL(configuredRedirect);
-    callbackPath = parsed.pathname;
-    if (!configuredPublic) origin = parsed.origin;
-  }
-
-  return { origin, callbackPath, redirectUri: `${origin}${callbackPath}`, proxied: origin !== local };
 }
 
 /**
@@ -191,3 +154,5 @@ function send(res: http.ServerResponse, code: number, html: string): void {
   res.writeHead(code, { "content-type": "text/html; charset=utf-8" });
   res.end(html);
 }
+
+export { publicAddress, DEFAULT_PORT, type PublicAddress };
