@@ -2,7 +2,7 @@ import http from "node:http";
 import crypto from "node:crypto";
 import open from "open";
 import { listPosts, findPostBySlug, POSTS_DIR } from "./posts.js";
-import { renderIndex, renderPost, page, esc } from "./preview.js";
+import { renderIndex, renderPost, renderArticle, page, esc } from "./preview.js";
 import {
   LINKEDIN_CALLBACK_PATH,
   buildLinkedInAuthUrl,
@@ -91,6 +91,13 @@ export function startServer(opts: ServeOptions = {}): Promise<RunningServer> {
         const post = findPostBySlug(slug, dir);
         if (!post) return send(res, 404, page("Not found", `<p>No post with slug <code>${esc(slug)}</code>.</p>`));
         return send(res, 200, await renderPost(post));
+      }
+
+      if (url.pathname.startsWith("/article/")) {
+        const slug = decodeURIComponent(url.pathname.slice("/article/".length));
+        const post = findPostBySlug(slug, dir);
+        if (!post) return send(res, 404, page("Not found", `<p>No post with slug <code>${esc(slug)}</code>.</p>`));
+        return send(res, 200, await renderArticle(post));
       }
 
       if (url.pathname === "/auth/linkedin") {
