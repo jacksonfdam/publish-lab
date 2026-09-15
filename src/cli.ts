@@ -3,8 +3,7 @@ import "dotenv/config";
 import { Command } from "commander";
 import { readPost, writePost, type Target } from "./frontmatter.js";
 import { publishPost } from "./publish.js";
-import { authenticate } from "./linkedin/oauth.js";
-import { startPreviewServer } from "./preview.js";
+import { startServer, authorize, DEFAULT_PORT } from "./server.js";
 import { TEASER_LIMITS, checkTeasers, deriveTeasers, applyTeasers, type TeaserField } from "./teasers.js";
 
 const program = new Command()
@@ -70,23 +69,31 @@ program
   });
 
 program
-  .command("preview")
-  .description("Serve posts/ as HTML on localhost so you can read a draft before publishing it")
-  .option("-p, --port <port>", "port to listen on", "4000")
+  .command("serve")
+  .alias("preview")
+  .description("One local server: read drafts at / and authorize providers at /auth/<provider>")
+  .option("-p, --port <port>", "port to listen on", String(DEFAULT_PORT))
   .option("-d, --dir <dir>", "directory holding the Markdown posts", "posts")
   .action(async (o: { port: string; dir: string }) => {
-    const port = Number(o.port);
-    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`Invalid port ${o.port}`);
-    await startPreviewServer({ port, dir: o.dir });
+    const running = await startServer({ port: parsePort(o.port), dir: o.dir });
+    console.log(`serving  ${running.url}  (${o.dir})`);
+    console.log(`authorize  ${running.url}/auth/linkedin`);
   });
 
 program
   .command("auth <provider>")
   .description("Run the OAuth flow (currently: linkedin)")
-  .action(async (provider: string) => {
+  .option("-p, --port <port>", "port the callback server listens on", String(DEFAULT_PORT))
+  .action(async (provider: string, o: { port: string }) => {
     if (provider !== "linkedin") throw new Error(`Unknown provider ${provider}`);
-    await authenticate();
+    await authorize({ port: parsePort(o.port) });
   });
+
+function parsePort(value: string): number {
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`Invalid port ${value}`);
+  return port;
+}
 
 function preview(value?: string): string {
   if (!value) return "(empty)";

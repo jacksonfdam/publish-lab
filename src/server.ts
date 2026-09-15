@@ -1,0 +1,160 @@
+import http from "node:http";
+import crypto from "node:crypto";
+import open from "open";
+import { listPosts, findPostBySlug, POSTS_DIR } from "./posts.js";
+import { renderIndex, renderPost, page, esc } from "./preview.js";
+import {
+  LINKEDIN_CALLBACK_PATH,
+  buildLinkedInAuthUrl,
+  completeLinkedInAuth,
+  type TokenFile,
+} from "./linkedin/oauth.js";
+
+export const DEFAULT_PORT = 4000;
+
+export interface ServeOptions {
+  port?: number;
+  dir?: string;
+}
+
+export interface RunningServer {
+  server: http.Server;
+  port: number;
+  url: string;
+  /** Resolves when a provider finishes its flow through the callback route. */
+  nextToken(): Promise<TokenFile>;
+}
+
+/**
+ * One local server for the whole lab: it reads the Markdown in `posts/` and it catches the
+ * OAuth callbacks. A second throwaway server for the callback is what made the redirect URI
+ * a string that had to agree with a port nobody could see — here the redirect URI is simply
+ * this server's own address.
+ */
+export function startServer(opts: ServeOptions = {}): Promise<RunningServer> {
+  const port = opts.port ?? DEFAULT_PORT;
+  const dir = opts.dir ?? POSTS_DIR;
+  const origin = `http://localhost:${port}`;
+  const redirectUri = `${origin}${LINKEDIN_CALLBACK_PATH}`;
+
+  const states = new Set<string>();
+  let resolveToken: ((t: TokenFile) => void) | undefined;
+  let rejectToken: ((e: Error) => void) | undefined;
+
+  warnAboutRedirectUri(redirectUri);
+
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url ?? "/", origin);
+
+    try {
+      if (url.pathname === "/") return send(res, 200, renderIndex(listPosts(dir), dir));
+
+      if (url.pathname.startsWith("/post/")) {
+        const slug = decodeURIComponent(url.pathname.slice("/post/".length));
+        const post = findPostBySlug(slug, dir);
+        if (!post) return send(res, 404, page("Not found", `<p>No post with slug <code>${esc(slug)}</code>.</p>`));
+        return send(res, 200, await renderPost(post));
+      }
+
+      if (url.pathname === "/auth/linkedin") {
+        const state = crypto.randomBytes(16).toString("hex");
+        states.add(state);
+        res.writeHead(302, { location: buildLinkedInAuthUrl(redirectUri, state) });
+        return void res.end();
+      }
+
+      if (url.pathname === LINKEDIN_CALLBACK_PATH) return void (await handleCallback(url, res));
+
+      send(res, 404, page("Not found", "<p>Nothing here.</p>"));
+    } catch (e) {
+      send(res, 500, page("Error", `<pre>${esc((e as Error).message)}</pre>`));
+    }
+  });
+
+  async function handleCallback(url: URL, res: http.ServerResponse): Promise<void> {
+    const fail = (message: string): void => {
+      send(res, 400, page("Authorization failed", `<p>${esc(message)}</p>`));
+      rejectToken?.(new Error(message));
+    };
+
+    const error = url.searchParams.get("error");
+    if (error) return fail(`LinkedIn returned ${error}: ${url.searchParams.get("error_description") ?? "no description"}`);
+
+    const state = url.searchParams.get("state");
+    if (!state || !states.delete(state)) return fail("OAuth state mismatch — start again at /auth/linkedin");
+
+    const code = url.searchParams.get("code");
+    if (!code) return fail("LinkedIn sent no authorization code");
+
+    try {
+      const token = await completeLinkedInAuth(code, redirectUri);
+      send(res, 200, page("Authorized", "<p>LinkedIn token saved. You can close this tab.</p>"));
+      resolveToken?.(token);
+    } catch (e) {
+      fail((e as Error).message);
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    server.once("error", reject);
+    // Loopback only: unpublished drafts and an OAuth callback have no business on the network.
+    server.listen(port, "127.0.0.1", () => {
+      server.removeListener("error", reject);
+      resolve({
+        server,
+        port,
+        url: origin,
+        nextToken: () =>
+          new Promise<TokenFile>((res2, rej2) => {
+            resolveToken = res2;
+            rejectToken = rej2;
+          }),
+      });
+    });
+  });
+}
+
+/** Runs the browser flow on a short-lived server and returns the token. */
+export async function authorize(opts: ServeOptions = {}): Promise<TokenFile> {
+  const port = opts.port ?? DEFAULT_PORT;
+
+  let running: RunningServer;
+  try {
+    running = await startServer(opts);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === "EADDRINUSE") {
+      throw new Error(
+        `Port ${port} is already in use — if that is \`publish-post serve\`, authorize in the browser instead: http://localhost:${port}/auth/linkedin`,
+      );
+    }
+    throw e;
+  }
+
+  const token = running.nextToken();
+  console.error(`Opening browser for LinkedIn login… (${running.url}/auth/linkedin)`);
+  await open(`${running.url}/auth/linkedin`);
+
+  try {
+    return await token;
+  } finally {
+    running.server.close();
+  }
+}
+
+/**
+ * The redirect URI is derived from the port this server bound, so a stale LINKEDIN_REDIRECT_URI
+ * can no longer point the browser somewhere nothing is listening — but LinkedIn still rejects
+ * the flow unless the app registers the URI below, so say it out loud.
+ */
+function warnAboutRedirectUri(redirectUri: string): void {
+  const configured = process.env.LINKEDIN_REDIRECT_URI;
+  if (configured && configured !== redirectUri) {
+    console.error(`! LINKEDIN_REDIRECT_URI is ${configured}`);
+    console.error(`! This server answers ${redirectUri} — register that one in the LinkedIn app.`);
+  }
+}
+
+function send(res: http.ServerResponse, code: number, html: string): void {
+  res.writeHead(code, { "content-type": "text/html; charset=utf-8" });
+  res.end(html);
+}

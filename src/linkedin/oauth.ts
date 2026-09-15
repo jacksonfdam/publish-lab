@@ -1,13 +1,14 @@
-import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import open from "open";
 
 const TOKEN_FILE = path.resolve(".tokens/linkedin.json");
+
+/** Route the local server exposes. The redirect URI is this path on whatever port it bound. */
+export const LINKEDIN_CALLBACK_PATH = "/auth/linkedin/callback";
 const SCOPES = ["openid", "profile", "w_member_social"];
 
-interface TokenFile {
+export interface TokenFile {
   access_token: string;
   expires_at: number; // epoch ms
   person_urn: string;
@@ -23,48 +24,25 @@ export async function getLinkedInToken(): Promise<TokenFile> {
     if (t.expires_at - Date.now() > 24 * 3600 * 1000) return t;
     console.error("LinkedIn token expired or expiring — re-authenticating.");
   }
-  return authenticate();
+  // Imported lazily: the server imports this module, so a static import would be a cycle.
+  const { authorize } = await import("../server.js");
+  return authorize();
 }
 
-export async function authenticate(): Promise<TokenFile> {
-  const clientId = mustEnv("LINKEDIN_CLIENT_ID");
-  const clientSecret = mustEnv("LINKEDIN_CLIENT_SECRET");
-  const redirectUri = process.env.LINKEDIN_REDIRECT_URI ?? "http://localhost:8000/auth/linkedin/callback";
-  const port = Number(new URL(redirectUri).port || 8000);
-  const state = crypto.randomBytes(16).toString("hex");
-
-  const authUrl = new URL("https://www.linkedin.com/oauth/v2/authorization");
-  authUrl.search = new URLSearchParams({
+export function buildLinkedInAuthUrl(redirectUri: string, state: string): string {
+  const url = new URL("https://www.linkedin.com/oauth/v2/authorization");
+  url.search = new URLSearchParams({
     response_type: "code",
-    client_id: clientId,
+    client_id: mustEnv("LINKEDIN_CLIENT_ID"),
     redirect_uri: redirectUri,
     state,
     scope: SCOPES.join(" "),
   }).toString();
+  return url.toString();
+}
 
-  const code = await new Promise<string>((resolve, reject) => {
-    const server = http.createServer((req, res) => {
-      const url = new URL(req.url ?? "/", `http://localhost:${port}`);
-      if (url.pathname !== new URL(redirectUri).pathname) return void res.end();
-      if (url.searchParams.get("state") !== state) {
-        res.end("State mismatch");
-        return reject(new Error("OAuth state mismatch"));
-      }
-      const err = url.searchParams.get("error");
-      if (err) {
-        res.end(`LinkedIn error: ${err}`);
-        return reject(new Error(err));
-      }
-      res.end("Authentication successful — you can close this tab.");
-      server.close();
-      resolve(url.searchParams.get("code")!);
-    });
-    server.listen(port, () => {
-      console.error(`Opening browser for LinkedIn login…`);
-      open(authUrl.toString());
-    });
-  });
-
+/** Trades the authorization code for a token and writes it to `.tokens/linkedin.json`. */
+export async function completeLinkedInAuth(code: string, redirectUri: string): Promise<TokenFile> {
   const tokenRes = await fetch("https://www.linkedin.com/oauth/v2/accessToken", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -72,8 +50,8 @@ export async function authenticate(): Promise<TokenFile> {
       grant_type: "authorization_code",
       code,
       redirect_uri: redirectUri,
-      client_id: clientId,
-      client_secret: clientSecret,
+      client_id: mustEnv("LINKEDIN_CLIENT_ID"),
+      client_secret: mustEnv("LINKEDIN_CLIENT_SECRET"),
     }),
   });
   if (!tokenRes.ok) throw new Error(`LinkedIn token exchange ${tokenRes.status}: ${await tokenRes.text()}`);
