@@ -60,7 +60,8 @@ export function startServer(opts: ServeOptions = {}): Promise<RunningServer> {
         const slug = decodeURIComponent(url.pathname.slice("/article/".length));
         const post = findPostBySlug(slug, dir);
         if (!post) return send(res, 404, page("Not found", `<p>No post with slug <code>${esc(slug)}</code>.</p>`));
-        return send(res, 200, await renderArticle(post));
+        const flavour = url.searchParams.get("for") === "linkedin" ? "linkedin" : undefined;
+        return send(res, 200, await renderArticle(post, flavour));
       }
 
       if (url.pathname === "/auth/linkedin") {
