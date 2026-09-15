@@ -28,7 +28,7 @@ src/posts.ts                reads posts/, surfacing files whose front matter won
 src/preview.ts              localhost HTML preview of posts/ before anything is published
 src/targets/{site,devto,linkedin,medium}.ts
 src/linkedin/oauth.ts       localhost OAuth callback + token cache in .tokens/
-src/mcp.ts                  same pipeline exposed as MCP tools (post_status, publish_post)
+src/mcp.ts                  MCP tools: list_posts, read_post, create_post, post_status, publish_post
 .github/workflows/publish.yml   optional: publish to dev.to on merge to main
 ```
 
@@ -66,6 +66,20 @@ The index lists every post in `posts/` with its status and which targets already
 Posts whose front matter doesn't parse get their own section with the error, which is usually the fastest way to find a missing `slug` or a broken YAML block.
 
 The server binds to `127.0.0.1` only. These are unpublished drafts.
+
+## MCP tools
+
+`npm run mcp` (or `.mcp.json`, picked up automatically) exposes the pipeline over stdio:
+
+| Tool | Does |
+| --- | --- |
+| `list_posts` | Everything in `posts/` with front matter and publish records, optionally filtered by `status`. Files whose front matter won't parse come back under `broken` instead of vanishing. |
+| `read_post` | One post by slug: front matter plus body. |
+| `create_post` | New draft from title/slug/description/tags. Fails on an existing slug — it never overwrites. |
+| `post_status` | Front matter and publish records for one file path. |
+| `publish_post` | Runs the publish fan-out. |
+
+Slugs are validated against `^[a-z0-9]+(-[a-z0-9]+)*$` rather than sanitised: the slug becomes both the filename and the canonical URL, so a silently rewritten one breaks every link that was already published.
 
 ## Front matter
 
