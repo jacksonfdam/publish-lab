@@ -22,9 +22,10 @@ Everything else follows from "publish to your own site first, so the canonical U
 ```
 posts/                      one Markdown file per article, front matter is the state
 .claude/skills/post/        Claude Code skill: voice, structure, front matter schema, publish steps
-src/cli.ts                  publish-post publish|status|preview|auth
+src/cli.ts                  publish-post publish|status|teasers|preview|auth
 src/publish.ts              orchestrates targets in order, writes URLs back into front matter
 src/posts.ts                reads posts/, surfacing files whose front matter won't parse
+src/teasers.ts              per-network limits, derived drafts, over-limit checks
 src/preview.ts              localhost HTML preview of posts/ before anything is published
 src/targets/{site,devto,linkedin,medium}.ts
 src/linkedin/oauth.ts       localhost OAuth callback + token cache in .tokens/
@@ -49,10 +50,39 @@ npm run dev -- publish posts/x.md --dry-run
 npm run dev -- publish posts/x.md --targets linkedin
 npm run dev -- publish posts/x.md --force          # re-publish / ignore status
 npm run dev -- status posts/x.md
+npm run dev -- teasers posts/x.md                 # character counts per network
+npm run dev -- teasers posts/x.md --write         # derive the empty ones
 npm run preview                                   # read drafts at http://localhost:4000
 npm run auth:linkedin
 npm run mcp                                       # stdio MCP server
 ```
+
+## Social teasers
+
+Each post carries its own copy per network, so nothing gets improvised in someone else's editor at publish time:
+
+| Field | Limit | Room left for the link |
+| --- | --- | --- |
+| `linkedin_teaser` | 3000 | none — the URL rides on the card |
+| `medium_subtitle` | 120 | none — subtitles carry no link |
+| `twitter_teaser` | 280 | 24 (X counts every URL as 23) |
+| `threads_teaser` | 500 | 61 |
+| `bluesky_teaser` | 300 | 61 |
+
+Plus `hashtags` (one set, stored without the `#`) and `hero_prompt` for the cover image.
+
+```
+npm run dev -- teasers posts/x.md
+Hello, lab: publishing this post from a Markdown file  [draft]
+  ✓ linkedin_teaser   539/3000  I got tired of copy-pasting the same article into three edi…
+    medium_subtitle      -/120  (empty)
+```
+
+The command exits non-zero when a field is over its limit, so it works as a gate. `--write` fills the empty fields with a draft derived from `description` and `tags`, and `--force` replaces fields that already have content.
+
+Derived copy is a floor, not the finished thing — it exists so nothing ships empty. The `/post` skill writes the real version per network, and its output overwrites the derived draft.
+
+Nothing here posts to X, Threads or Bluesky. Threads needs a reviewed Meta app and X charges for write access, so these fields are written to be copied out.
 
 ## Preview
 
@@ -61,7 +91,7 @@ npm run preview                  # http://localhost:4000
 npm run dev -- preview --port 5000 --dir drafts
 ```
 
-The index lists every post in `posts/` with its status and which targets already have a URL; `/post/<slug>` renders the body and shows the front matter above it. Files are read per request, so editing the Markdown and refreshing is the whole loop — no watcher, no restart.
+The index lists every post in `posts/` with its status and which targets already have a URL; `/post/<slug>` renders the body, shows the front matter above it, and puts every teaser in its own table with character counts — an over-limit one is marked in red. Files are read per request, so editing the Markdown and refreshing is the whole loop — no watcher, no restart.
 
 Posts whose front matter doesn't parse get their own section with the error, which is usually the fastest way to find a missing `slug` or a broken YAML block.
 
