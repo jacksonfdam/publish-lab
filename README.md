@@ -22,13 +22,14 @@ Everything else follows from "publish to your own site first, so the canonical U
 ```
 posts/                      one Markdown file per article, front matter is the state
 .claude/skills/post/        Claude Code skill: voice, structure, front matter schema, publish steps
-src/cli.ts                  publish-post publish|status|teasers|preview|auth
+src/cli.ts                  publish-post publish|status|teasers|serve|auth
 src/publish.ts              orchestrates targets in order, writes URLs back into front matter
 src/posts.ts                reads posts/, surfacing files whose front matter won't parse
 src/teasers.ts              per-network limits, derived drafts, over-limit checks
-src/preview.ts              localhost HTML preview of posts/ before anything is published
+src/server.ts               the one local server: posts at / and OAuth callbacks at /auth/
+src/preview.ts              renders posts/ as HTML for that server
 src/targets/{site,devto,linkedin,medium}.ts
-src/linkedin/oauth.ts       localhost OAuth callback + token cache in .tokens/
+src/linkedin/oauth.ts       LinkedIn authorize URL + code exchange, token cache in .tokens/
 src/mcp.ts                  MCP tools: list_posts, read_post, create_post, post_status, publish_post
 .github/workflows/publish.yml   optional: publish to dev.to on merge to main
 ```
@@ -38,7 +39,7 @@ src/mcp.ts                  MCP tools: list_posts, read_post, create_post, post_
 1. `npm install && cp .env.example .env`
 2. **Site**: point `SITE_REPO_DIR` / `SITE_CONTENT_DIR` / `SITE_BASE_URL` at your Next.js/MDX repo. The site target copies the Markdown in, commits and pushes; Vercel builds it.
 3. **dev.to**: Settings → Extensions → generate an API key → `DEVTO_API_KEY`.
-4. **LinkedIn**: create an app at linkedin.com/developers/apps, add the products *Sign In with LinkedIn using OpenID Connect* and *Share on LinkedIn*, set redirect URI `http://localhost:8000/auth/linkedin/callback`, copy client id/secret into `.env`, then `npm run auth:linkedin`.
+4. **LinkedIn**: create an app at linkedin.com/developers/apps, add the products *Sign In with LinkedIn using OpenID Connect* and *Share on LinkedIn*, set the redirect URI to `http://localhost:4000/auth/linkedin/callback` — verbatim, in both the LinkedIn app and `.env` — then `npm run auth:linkedin`.
 5. **Medium**: check medium.com/me/settings → Security and apps → Integration tokens. If you have one, put it in `MEDIUM_TOKEN`; otherwise leave it empty and use the import flow.
 6. Claude Code picks up `.claude/skills/post` and `.mcp.json` automatically when you open the repo.
 
@@ -52,7 +53,7 @@ npm run dev -- publish posts/x.md --force          # re-publish / ignore status
 npm run dev -- status posts/x.md
 npm run dev -- teasers posts/x.md                 # character counts per network
 npm run dev -- teasers posts/x.md --write         # derive the empty ones
-npm run preview                                   # read drafts at http://localhost:4000
+npm run serve                                     # posts + authorization at http://localhost:4000
 npm run auth:linkedin
 npm run mcp                                       # stdio MCP server
 ```
@@ -84,14 +85,29 @@ Derived copy is a floor, not the finished thing — it exists so nothing ships e
 
 Nothing here posts to X, Threads or Bluesky. Threads needs a reviewed Meta app and X charges for write access, so these fields are written to be copied out.
 
-## Preview
+## The local server
+
+One server does both jobs. There is no second web service to keep running:
 
 ```
-npm run preview                  # http://localhost:4000
-npm run dev -- preview --port 5000 --dir drafts
+npm run serve                    # http://localhost:4000
+npm run dev -- serve --port 5000 --dir drafts
 ```
 
-The index lists every post in `posts/` with its status and which targets already have a URL; `/post/<slug>` renders the body, shows the front matter above it, and puts every teaser in its own table with character counts — an over-limit one is marked in red. Files are read per request, so editing the Markdown and refreshing is the whole loop — no watcher, no restart.
+| Route | |
+| --- | --- |
+| `/` | Every post in `posts/` with status, targets and publish state |
+| `/post/<slug>` | The rendered article, front matter, and the teasers with character counts |
+| `/auth/linkedin` | Starts the LinkedIn flow |
+| `/auth/linkedin/callback` | Receives the code and writes `.tokens/linkedin.json` |
+
+`npm run auth:linkedin` starts the same server, opens the browser and shuts down once the token lands. If the port is already taken because `npm run serve` is running, it says so and points you at `http://localhost:4000/auth/linkedin` — authorize there instead.
+
+**The redirect URI is the server's own address.** It is no longer a free-form string pointing at a second process: the callback route lives on whatever port the server bound. It still has to be registered verbatim in the LinkedIn app, and the server warns at startup when `LINKEDIN_REDIRECT_URI` disagrees with what it actually answers.
+
+A hostname like `publishlab.test` will not work on its own. It resolves to loopback but nothing serves port 443 unless you run a TLS proxy and point it at this server — a separate piece of setup, and `http://localhost:4000` is accepted by LinkedIn without any of it.
+
+The index at `/` lists every post in `posts/` with its status and which targets already have a URL; `/post/<slug>` renders the body, shows the front matter above it, and puts every teaser in its own table with character counts — an over-limit one is marked in red. Files are read per request, so editing the Markdown and refreshing is the whole loop — no watcher, no restart.
 
 Posts whose front matter doesn't parse get their own section with the error, which is usually the fastest way to find a missing `slug` or a broken YAML block.
 
