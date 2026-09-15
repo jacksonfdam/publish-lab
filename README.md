@@ -1,0 +1,67 @@
+# publish-lab
+
+Write once in Markdown, publish to your own site, dev.to, LinkedIn and Medium — with Claude Code drafting the article and a small TypeScript CLI doing the fan-out.
+
+```
+/post "write about the DRAUGR Wasm experiment"     # Claude Code skill drafts posts/<slug>.md
+…you edit, set status: published…
+npm run dev -- publish posts/<slug>.md              # site → dev.to → LinkedIn → Medium
+```
+
+## Why it's shaped like this
+
+Two platform realities drove the design:
+
+- **Medium closed its API.** No new integration tokens are issued; existing ones still work. So Medium is handled either through a legacy token (if you have one) or through Medium's *Import a story* tool, which the CLI opens pre-filled with your canonical URL. That last click is manual on purpose — browser automation against the editor is fragile and against their ToS.
+- **LinkedIn's API is real but partner-gated for refresh tokens.** A personal Developer app can create posts (`w_member_social`), but the token dies after ~60 days and you re-run the browser login. The CLI handles that: `npm run auth:linkedin`.
+
+Everything else follows from "publish to your own site first, so the canonical URL exists before anything else goes out".
+
+## Layout
+
+```
+posts/                      one Markdown file per article, front matter is the state
+.claude/skills/post/        Claude Code skill: voice, structure, front matter schema, publish steps
+src/cli.ts                  publish-post publish|status|auth
+src/publish.ts              orchestrates targets in order, writes URLs back into front matter
+src/targets/{site,devto,linkedin,medium}.ts
+src/linkedin/oauth.ts       localhost OAuth callback + token cache in .tokens/
+src/mcp.ts                  same pipeline exposed as MCP tools (post_status, publish_post)
+.github/workflows/publish.yml   optional: publish to dev.to on merge to main
+```
+
+## Setup
+
+1. `npm install && cp .env.example .env`
+2. **Site**: point `SITE_REPO_DIR` / `SITE_CONTENT_DIR` / `SITE_BASE_URL` at your Next.js/MDX repo. The site target copies the Markdown in, commits and pushes; Vercel builds it.
+3. **dev.to**: Settings → Extensions → generate an API key → `DEVTO_API_KEY`.
+4. **LinkedIn**: create an app at linkedin.com/developers/apps, add the products *Sign In with LinkedIn using OpenID Connect* and *Share on LinkedIn*, set redirect URI `http://localhost:8000/auth/linkedin/callback`, copy client id/secret into `.env`, then `npm run auth:linkedin`.
+5. **Medium**: check medium.com/me/settings → Security and apps → Integration tokens. If you have one, put it in `MEDIUM_TOKEN`; otherwise leave it empty and use the import flow.
+6. Claude Code picks up `.claude/skills/post` and `.mcp.json` automatically when you open the repo.
+
+## Commands
+
+```
+npm run dev -- publish posts/x.md                 # all targets in post.targets
+npm run dev -- publish posts/x.md --dry-run
+npm run dev -- publish posts/x.md --targets linkedin
+npm run dev -- publish posts/x.md --force          # re-publish / ignore status
+npm run dev -- status posts/x.md
+npm run auth:linkedin
+npm run mcp                                       # stdio MCP server
+```
+
+## Front matter
+
+See `.claude/skills/post/references/frontmatter.md`. The important bits: `slug` never changes after first publish, `status: published` is the gate, and `published:` is written by the tool — don't edit it by hand.
+
+## Known limits
+
+- LinkedIn API creates feed posts (text + article card / image), not LinkedIn Articles.
+- dev.to accepts max 4 tags, Medium 3; tags are truncated silently.
+- Bump `LINKEDIN_VERSION` (YYYYMM) every few months; LinkedIn retires old versions.
+- CI skips LinkedIn unless you supply the cached token as a secret.
+
+## License
+
+MIT. If you use it, credit + a shout-out + share your own experiments.
