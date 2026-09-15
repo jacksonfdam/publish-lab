@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "publish-lab": {
+      "command": "npx",
+      "args": ["tsx", "src/mcp.ts"]
+    }
+  }
+}
