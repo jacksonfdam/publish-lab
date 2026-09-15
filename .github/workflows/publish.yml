@@ -1,0 +1,31 @@
+# Publishes any post that has status: published but no `published.site` record yet.
+# LinkedIn is skipped in CI (needs the interactive OAuth token) — run that step locally,
+# or commit .tokens/linkedin.json to a secret and restore it here if you want full automation.
+name: publish
+on:
+  push:
+    branches: [main]
+    paths: ["posts/**"]
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm ci
+      - name: Publish new posts to dev.to
+        env:
+          DEVTO_API_KEY: ${{ secrets.DEVTO_API_KEY }}
+        run: |
+          for f in $(git diff --name-only ${{ github.event.before }} ${{ github.sha }} -- posts/); do
+            grep -q '^status: published' "$f" || continue
+            npm run dev -- publish "$f" --targets devto || exit 1
+          done
+      - name: Commit publish records
+        run: |
+          git config user.name "publish-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add posts && git commit -m "chore: record publish URLs" || echo "nothing to commit"
+          git push
