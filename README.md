@@ -101,11 +101,31 @@ npm run dev -- serve --port 5000 --dir drafts
 | `/auth/linkedin` | Starts the LinkedIn flow |
 | `/auth/linkedin/callback` | Receives the code and writes `.tokens/linkedin.json` |
 
-`npm run auth:linkedin` starts the same server, opens the browser and shuts down once the token lands. If the port is already taken because `npm run serve` is running, it says so and points you at `http://localhost:4000/auth/linkedin` — authorize there instead.
+`npm run auth:linkedin` starts the same server, opens the browser and shuts down once the token lands. If the port is already taken because `npm run serve` is running, it says so and points you at `/auth/linkedin` on the public address — authorize there instead.
 
-**The redirect URI is the server's own address.** It is no longer a free-form string pointing at a second process: the callback route lives on whatever port the server bound. It still has to be registered verbatim in the LinkedIn app, and the server warns at startup when `LINKEDIN_REDIRECT_URI` disagrees with what it actually answers.
+### Behind a proxy
 
-A hostname like `publishlab.test` will not work on its own. It resolves to loopback but nothing serves port 443 unless you run a TLS proxy and point it at this server — a separate piece of setup, and `http://localhost:4000` is accepted by LinkedIn without any of it.
+The port the server binds and the address the browser sees are two different things. With a proxy mapping `https://publishlab.test` to a local port, the browser never sees the bind address, so the redirect URI cannot be derived from it:
+
+```
+PUBLIC_URL=https://publishlab.test npm run dev -- serve --port 8082
+
+listening  127.0.0.1:8082  (posts)
+proxied as https://publishlab.test — forward it to port 8082
+posts      https://publishlab.test/
+authorize  https://publishlab.test/auth/linkedin
+callback   https://publishlab.test/auth/linkedin/callback  ← register this in the LinkedIn app
+```
+
+The outside address is resolved in this order:
+
+1. `PUBLIC_URL`, when set — the origin your proxy exposes.
+2. The origin of `LINKEDIN_REDIRECT_URI`, when that is set. Pointing it at `https://publishlab.test/auth/linkedin/callback` is enough on its own; `PUBLIC_URL` only matters when the two differ.
+3. `http://localhost:<port>` otherwise.
+
+The callback route is served on whatever path `LINKEDIN_REDIRECT_URI` names, defaulting to `/auth/linkedin/callback`, so a proxy that rewrites paths still lands on it. Whatever comes out is printed at startup — that exact string is what goes under **Authorized redirect URLs** in the LinkedIn app.
+
+Only the bind is loopback-only. Exposing it further is the proxy's job, and LinkedIn also accepts a plain `http://localhost:4000` callback if you would rather skip the proxy entirely.
 
 The index at `/` lists every post in `posts/` with its status and which targets already have a URL; `/post/<slug>` renders the body, shows the front matter above it, and puts every teaser in its own table with character counts — an over-limit one is marked in red. Files are read per request, so editing the Markdown and refreshing is the whole loop — no watcher, no restart.
 
