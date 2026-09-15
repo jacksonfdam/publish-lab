@@ -107,6 +107,10 @@ export async function renderArticle(post: Post): Promise<string> {
   const html = await marked.parse(post.body);
   const { title, description, canonical_url } = post.meta;
 
+  // The body convention repeats the title as an H1 (Medium and dev.to want it there), so
+  // adding one here would import the headline twice. Only supply it when the body has none.
+  const heading = /^\s*#\s+\S/.test(post.body) ? "" : `<h1>${esc(title)}</h1>\n`;
+
   const head = [
     `<meta charset="utf-8">`,
     `<meta name="viewport" content="width=device-width, initial-scale=1">`,
@@ -137,8 +141,7 @@ ${head}
 </head>
 <body>
 <article>
-<h1>${esc(title)}</h1>
-${html}
+${heading}${html}
 </article>
 </body>
 </html>`;
