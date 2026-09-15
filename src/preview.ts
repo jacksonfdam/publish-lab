@@ -1,6 +1,7 @@
 import { marked } from "marked";
 import { type PostListing } from "./posts.js";
 import { TEASER_LIMITS, checkTeasers, type TeaserField } from "./teasers.js";
+import { forLinkedInArticle } from "./linkedin/article.js";
 import type { Post } from "./frontmatter.js";
 
 const STATUS_ORDER = ["idea", "draft", "review", "published"] as const;
@@ -103,13 +104,15 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
  * deciding whether to publish; everything it adds for that purpose (front matter table,
  * teaser table) would land inside the imported story.
  */
-export async function renderArticle(post: Post): Promise<string> {
-  const html = await marked.parse(post.body);
+export async function renderArticle(post: Post, flavour?: "linkedin"): Promise<string> {
+  const source = flavour === "linkedin" ? forLinkedInArticle(post.body) : post.body;
+  const html = await marked.parse(source);
   const { title, description, canonical_url } = post.meta;
 
   // The body convention repeats the title as an H1 (Medium and dev.to want it there), so
   // adding one here would import the headline twice. Only supply it when the body has none.
-  const heading = /^\s*#\s+\S/.test(post.body) ? "" : `<h1>${esc(title)}</h1>\n`;
+  // The LinkedIn flavour strips it deliberately — that editor has its own title field.
+  const heading = flavour === "linkedin" || /^\s*#\s+\S/.test(source) ? "" : `<h1>${esc(title)}</h1>\n`;
 
   const head = [
     `<meta charset="utf-8">`,
