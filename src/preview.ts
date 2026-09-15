@@ -1,9 +1,13 @@
 import http from "node:http";
 import { marked } from "marked";
 import { listPosts, findPostBySlug, POSTS_DIR, type PostListing } from "./posts.js";
+import { TEASER_LIMITS, checkTeasers, type TeaserField } from "./teasers.js";
 import type { Post } from "./frontmatter.js";
 
 const STATUS_ORDER = ["idea", "draft", "review", "published"] as const;
+
+// Rendered in their own table below, with character counts.
+const TEASER_FIELDS = new Set([...Object.keys(TEASER_LIMITS), "hashtags", "hero_prompt"]);
 
 export interface PreviewOptions {
   port?: number;
@@ -78,6 +82,7 @@ function renderIndex({ posts, broken }: PostListing, dir: string): string {
 
 async function renderPost(post: Post): Promise<string> {
   const rows = Object.entries(post.meta)
+    .filter(([k]) => !TEASER_FIELDS.has(k))
     .filter(([, v]) => v !== undefined && !(Array.isArray(v) && v.length === 0) && !(isPlainObject(v) && Object.keys(v).length === 0))
     .map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(format(v))}</td></tr>`)
     .join("");
@@ -88,8 +93,40 @@ async function renderPost(post: Post): Promise<string> {
     post.meta.title,
     `<p class="back"><a href="/">← all posts</a></p>
      <table class="meta">${rows}</table>
+     ${renderTeasers(post)}
      <article>${html}</article>`,
   );
+}
+
+/**
+ * Character counts are the point here: a teaser that is four characters over its limit
+ * looks fine in the front matter table and gets rejected by the network.
+ */
+function renderTeasers(post: Post): string {
+  const over = new Set(checkTeasers(post.meta).map((v) => v.field));
+
+  const rows = (Object.keys(TEASER_LIMITS) as TeaserField[])
+    .map((field) => {
+      const value = post.meta[field]?.trim();
+      const count = value ? `${[...value].length}/${TEASER_LIMITS[field]}` : `–/${TEASER_LIMITS[field]}`;
+      const cls = over.has(field) ? " over" : value ? "" : " empty";
+      return `<tr class="teaser${cls}">
+        <th>${esc(field)}<span class="count">${esc(count)}</span></th>
+        <td>${value ? esc(value) : "&mdash;"}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const tags = post.meta.hashtags ?? [];
+  const tagRow = `<tr class="teaser${tags.length ? "" : " empty"}"><th>hashtags</th><td>${
+    tags.length ? tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join(" ") : "&mdash;"
+  }</td></tr>`;
+
+  const heroRow = `<tr class="teaser${post.meta.hero_prompt ? "" : " empty"}"><th>hero_prompt</th><td>${
+    post.meta.hero_prompt ? esc(post.meta.hero_prompt.trim()) : "&mdash;"
+  }</td></tr>`;
+
+  return `<h2 class="section">Teasers</h2><table class="meta teasers">${rows}${tagRow}${heroRow}</table>`;
 }
 
 function format(v: unknown): string {
@@ -151,6 +188,14 @@ function page(title: string, body: string): string {
   article img { max-width: 100%; }
   article blockquote { margin: 1.5rem 0; padding-left: 1rem; border-left: 3px solid var(--line); color: var(--dim); }
   .back { font-size: 0.85rem; margin-bottom: 1.5rem; }
+  h2.section { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+               color: var(--dim); margin: 0 0 0.75rem; }
+  table.teasers { margin-bottom: 2.5rem; }
+  table.teasers td { white-space: pre-wrap; }
+  table.teasers .count { display: block; font-variant-numeric: tabular-nums; font-size: 0.75rem; opacity: 0.7; }
+  tr.teaser.empty td, tr.teaser.empty th { opacity: 0.45; }
+  tr.teaser.over th .count { color: #d73a4a; opacity: 1; font-weight: 600; }
+  tr.teaser.over td { color: #d73a4a; }
   .back a { text-decoration: none; }
 </style>
 </head>
