@@ -58,6 +58,12 @@ npm run auth:linkedin
 npm run mcp                                       # stdio MCP server
 ```
 
+### Importing into Medium
+
+Without a `MEDIUM_TOKEN` the Medium target opens *Import a story*, which fetches a URL and scrapes it. Point it at `/article/<slug>`, never at `/post/<slug>` — the review page renders the front matter and every social teaser as tables, and the importer would pull all of it into the story.
+
+`/article/<slug>` is the article and nothing else: the body, a description meta, an author meta. It emits `<link rel="canonical">` only when the post has a `canonical_url`, because a temporary tunnel address is not a canonical URL and an importer copies whatever it is told.
+
 ## Social teasers
 
 Each post carries its own copy per network, so nothing gets improvised in someone else's editor at publish time:
@@ -98,6 +104,7 @@ npm run dev -- serve --port 5000 --dir drafts
 | --- | --- |
 | `/` | Every post in `posts/` with status, targets and publish state |
 | `/post/<slug>` | The rendered article, front matter, and the teasers with character counts |
+| `/article/<slug>` | The same post with nothing around it, for Medium's importer to scrape |
 | `/auth/linkedin` | Starts the LinkedIn flow |
 | `/auth/linkedin/callback` | Receives the code and writes `.tokens/linkedin.json` |
 
