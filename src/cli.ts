@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { readPost, type Target } from "./frontmatter.js";
 import { publishPost } from "./publish.js";
 import { authenticate } from "./linkedin/oauth.js";
+import { startPreviewServer } from "./preview.js";
 
 const program = new Command()
   .name("publish-post")
@@ -27,6 +28,17 @@ program
     const p = readPost(file);
     console.log(`${p.meta.title}  [${p.meta.status}]`);
     for (const [t, r] of Object.entries(p.meta.published ?? {})) console.log(`  ${t.padEnd(9)} ${r.url}`);
+  });
+
+program
+  .command("preview")
+  .description("Serve posts/ as HTML on localhost so you can read a draft before publishing it")
+  .option("-p, --port <port>", "port to listen on", "4000")
+  .option("-d, --dir <dir>", "directory holding the Markdown posts", "posts")
+  .action(async (o: { port: string; dir: string }) => {
+    const port = Number(o.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error(`Invalid port ${o.port}`);
+    await startPreviewServer({ port, dir: o.dir });
   });
 
 program
