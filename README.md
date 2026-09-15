@@ -22,8 +22,10 @@ Everything else follows from "publish to your own site first, so the canonical U
 ```
 posts/                      one Markdown file per article, front matter is the state
 .claude/skills/post/        Claude Code skill: voice, structure, front matter schema, publish steps
-src/cli.ts                  publish-post publish|status|auth
+src/cli.ts                  publish-post publish|status|preview|auth
 src/publish.ts              orchestrates targets in order, writes URLs back into front matter
+src/posts.ts                reads posts/, surfacing files whose front matter won't parse
+src/preview.ts              localhost HTML preview of posts/ before anything is published
 src/targets/{site,devto,linkedin,medium}.ts
 src/linkedin/oauth.ts       localhost OAuth callback + token cache in .tokens/
 src/mcp.ts                  same pipeline exposed as MCP tools (post_status, publish_post)
@@ -47,9 +49,23 @@ npm run dev -- publish posts/x.md --dry-run
 npm run dev -- publish posts/x.md --targets linkedin
 npm run dev -- publish posts/x.md --force          # re-publish / ignore status
 npm run dev -- status posts/x.md
+npm run preview                                   # read drafts at http://localhost:4000
 npm run auth:linkedin
 npm run mcp                                       # stdio MCP server
 ```
+
+## Preview
+
+```
+npm run preview                  # http://localhost:4000
+npm run dev -- preview --port 5000 --dir drafts
+```
+
+The index lists every post in `posts/` with its status and which targets already have a URL; `/post/<slug>` renders the body and shows the front matter above it. Files are read per request, so editing the Markdown and refreshing is the whole loop — no watcher, no restart.
+
+Posts whose front matter doesn't parse get their own section with the error, which is usually the fastest way to find a missing `slug` or a broken YAML block.
+
+The server binds to `127.0.0.1` only. These are unpublished drafts.
 
 ## Front matter
 
