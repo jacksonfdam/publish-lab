@@ -16,9 +16,10 @@ program
   .option("-t, --targets <list>", "comma-separated subset: site,devto,linkedin,medium")
   .option("--dry-run", "show what would happen")
   .option("--force", "ignore status and re-publish already-published targets")
-  .action(async (file: string, o: { targets?: string; dryRun?: boolean; force?: boolean }) => {
+  .option("--source-url <url>", "where Medium should fetch the HTML from (a tunnel, a preview server)")
+  .action(async (file: string, o: { targets?: string; dryRun?: boolean; force?: boolean; sourceUrl?: string }) => {
     const targets = o.targets?.split(",").map((s) => s.trim()) as Target[] | undefined;
-    await publishPost(file, { targets, dryRun: o.dryRun, force: o.force });
+    await publishPost(file, { targets, dryRun: o.dryRun, force: o.force, sourceUrl: o.sourceUrl });
   });
 
 program
