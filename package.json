@@ -1,0 +1,30 @@
+{
+  "name": "publish-lab",
+  "version": "0.1.0",
+  "description": "Markdown-first drafting + multi-target publishing (own site, dev.to, LinkedIn, Medium)",
+  "type": "module",
+  "bin": { "publish-post": "./dist/cli.js" },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "auth:linkedin": "tsx src/cli.ts auth linkedin",
+    "mcp": "tsx src/mcp.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "commander": "^15.0.0",
+    "dotenv": "^17.4.2",
+    "gray-matter": "^4.0.3",
+    "marked": "^18.0.13",
+    "open": "^11.0.4",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.1",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  },
+  "engines": { "node": ">=20" },
+  "license": "MIT"
+}
