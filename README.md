@@ -64,6 +64,17 @@ Without a `MEDIUM_TOKEN` the Medium target opens *Import a story*, which fetches
 
 `/article/<slug>` is the article and nothing else: the body, a description meta, an author meta. It emits `<link rel="canonical">` only when the post has a `canonical_url`, because a temporary tunnel address is not a canonical URL and an importer copies whatever it is told.
 
+Medium needs somewhere to *fetch* from, which is not the same as a canonical claim, so the two are separate. `--source-url` points the importer at a tunnel for one run without writing anything into the front matter:
+
+```
+npm run dev -- publish posts/x.md --force --targets medium \
+  --source-url https://<tunnel>/article/x
+```
+
+With no `--source-url` the fetch address falls back to `canonical_url`, then the site publish record, then `<public origin>/article/<slug>`. dev.to and LinkedIn still require a real canonical — they publish a link, so an address that stops resolving leaves a broken post.
+
+Medium sets the imported story's canonical to whatever URL it fetched from. Importing from a tunnel means the story points at an address that dies with the tunnel; fix it in the story settings once the article has a real home.
+
 ## Social teasers
 
 Each post carries its own copy per network, so nothing gets improvised in someone else's editor at publish time:
