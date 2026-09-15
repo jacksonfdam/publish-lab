@@ -51,4 +51,6 @@ Only when the user asks to publish, or says the draft is final:
 4. Medium: unless `MEDIUM_TOKEN` is set, the CLI opens Medium's import tool in the browser; tell the user to click **Import** and then **Publish** there — that step is manual by design.
 5. Report the URLs written into `published:`.
 
+A LinkedIn **Article** is not one of the targets — the API only creates feed posts. When the user asks for an Article, point them at `/article/<slug>?for=linkedin` on the running server and tell them it is a copy-paste into LinkedIn's editor, with the title going in LinkedIn's own field.
+
 Never publish a post whose `status` is not `published` unless the user explicitly says `--force`.
