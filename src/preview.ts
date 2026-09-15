@@ -49,7 +49,7 @@ export async function renderPost(post: Post): Promise<string> {
 
   return page(
     post.meta.title,
-    `<p class="back"><a href="/">← all posts</a></p>
+    `<p class="back"><a href="/">← all posts</a> · <a href="/article/${encodeURIComponent(post.meta.slug)}">import view</a></p>
      <table class="meta">${rows}</table>
      ${renderTeasers(post)}
      <article>${html}</article>`,
@@ -95,6 +95,53 @@ function format(v: unknown): string {
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+/**
+ * The same post with nothing around it, for something that is going to scrape the page —
+ * Medium's "Import a story" being the reason this exists. `/post/<slug>` is for a person
+ * deciding whether to publish; everything it adds for that purpose (front matter table,
+ * teaser table) would land inside the imported story.
+ */
+export async function renderArticle(post: Post): Promise<string> {
+  const html = await marked.parse(post.body);
+  const { title, description, canonical_url } = post.meta;
+
+  const head = [
+    `<meta charset="utf-8">`,
+    `<meta name="viewport" content="width=device-width, initial-scale=1">`,
+    `<title>${esc(title)}</title>`,
+    description ? `<meta name="description" content="${esc(description)}">` : "",
+    `<meta name="author" content="Jackson F. de A. Mafra">`,
+    // Only when the post has a real home. A tunnel URL stops resolving the moment the tunnel
+    // closes, and an importer copies whatever it is told is canonical.
+    canonical_url ? `<link rel="canonical" href="${esc(canonical_url)}">` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+${head}
+<style>
+  body { max-width: 40rem; margin: 0 auto; padding: 3rem 1.25rem;
+         font: 17px/1.7 Georgia, "Iowan Old Style", serif; color: #1a1a1a; background: #fff; }
+  h1 { font-size: 1.9rem; line-height: 1.2; letter-spacing: -0.01em; }
+  img { max-width: 100%; }
+  pre { background: #f5f5f4; border-radius: 6px; padding: 1rem; overflow-x: auto;
+        font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.88em; }
+  blockquote { margin: 1.75rem 0; padding-left: 1rem; border-left: 3px solid #ddd; color: #555; }
+</style>
+</head>
+<body>
+<article>
+<h1>${esc(title)}</h1>
+${html}
+</article>
+</body>
+</html>`;
 }
 
 export function esc(s: string): string {
