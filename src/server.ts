@@ -19,32 +19,69 @@ export interface ServeOptions {
 
 export interface RunningServer {
   server: http.Server;
+  /** The port actually bound. Behind a proxy this is not the port the browser talks to. */
   port: number;
+  /** The outside address — what to open in a browser. */
   url: string;
+  address: PublicAddress;
   /** Resolves when a provider finishes its flow through the callback route. */
   nextToken(): Promise<TokenFile>;
+}
+
+export interface PublicAddress {
+  /** What the browser and LinkedIn see. Differs from the bind address behind a proxy. */
+  origin: string;
+  /** Path the callback route is served on, taken from the redirect URI when one is set. */
+  callbackPath: string;
+  redirectUri: string;
+  proxied: boolean;
+}
+
+/**
+ * Where this server is reachable from outside, which is not where it listens. A proxy that
+ * terminates TLS for something like `https://publishlab.test` and forwards to a local port
+ * means the browser never sees the bind address, so the redirect URI cannot be derived from
+ * it. `PUBLIC_URL` declares the outside address; otherwise `LINKEDIN_REDIRECT_URI` implies
+ * one, and a plain local run falls back to localhost on the bound port.
+ */
+export function publicAddress(port: number): PublicAddress {
+  const configuredRedirect = process.env.LINKEDIN_REDIRECT_URI?.trim();
+  const configuredPublic = process.env.PUBLIC_URL?.trim();
+  const local = `http://localhost:${port}`;
+
+  let origin = local;
+  let callbackPath = LINKEDIN_CALLBACK_PATH;
+
+  if (configuredPublic) origin = new URL(configuredPublic).origin;
+
+  if (configuredRedirect) {
+    const parsed = new URL(configuredRedirect);
+    callbackPath = parsed.pathname;
+    if (!configuredPublic) origin = parsed.origin;
+  }
+
+  return { origin, callbackPath, redirectUri: `${origin}${callbackPath}`, proxied: origin !== local };
 }
 
 /**
  * One local server for the whole lab: it reads the Markdown in `posts/` and it catches the
  * OAuth callbacks. A second throwaway server for the callback is what made the redirect URI
- * a string that had to agree with a port nobody could see — here the redirect URI is simply
- * this server's own address.
+ * a string that had to agree with a port nobody could see.
  */
 export function startServer(opts: ServeOptions = {}): Promise<RunningServer> {
   const port = opts.port ?? DEFAULT_PORT;
   const dir = opts.dir ?? POSTS_DIR;
-  const origin = `http://localhost:${port}`;
-  const redirectUri = `${origin}${LINKEDIN_CALLBACK_PATH}`;
+  const address = publicAddress(port);
+  const { redirectUri, callbackPath } = address;
+  // Only for resolving the incoming request path; the browser never sees this.
+  const base = `http://localhost:${port}`;
 
   const states = new Set<string>();
   let resolveToken: ((t: TokenFile) => void) | undefined;
   let rejectToken: ((e: Error) => void) | undefined;
 
-  warnAboutRedirectUri(redirectUri);
-
   const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url ?? "/", origin);
+    const url = new URL(req.url ?? "/", base);
 
     try {
       if (url.pathname === "/") return send(res, 200, renderIndex(listPosts(dir), dir));
@@ -63,7 +100,7 @@ export function startServer(opts: ServeOptions = {}): Promise<RunningServer> {
         return void res.end();
       }
 
-      if (url.pathname === LINKEDIN_CALLBACK_PATH) return void (await handleCallback(url, res));
+      if (url.pathname === callbackPath) return void (await handleCallback(url, res));
 
       send(res, 404, page("Not found", "<p>Nothing here.</p>"));
     } catch (e) {
@@ -103,7 +140,8 @@ export function startServer(opts: ServeOptions = {}): Promise<RunningServer> {
       resolve({
         server,
         port,
-        url: origin,
+        url: address.origin,
+        address,
         nextToken: () =>
           new Promise<TokenFile>((res2, rej2) => {
             resolveToken = res2;
@@ -123,8 +161,9 @@ export async function authorize(opts: ServeOptions = {}): Promise<TokenFile> {
     running = await startServer(opts);
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "EADDRINUSE") {
+      const { origin } = publicAddress(port);
       throw new Error(
-        `Port ${port} is already in use — if that is \`publish-post serve\`, authorize in the browser instead: http://localhost:${port}/auth/linkedin`,
+        `Port ${port} is already in use — if that is \`publish-post serve\`, authorize in the browser instead: ${origin}/auth/linkedin`,
       );
     }
     throw e;
@@ -138,19 +177,6 @@ export async function authorize(opts: ServeOptions = {}): Promise<TokenFile> {
     return await token;
   } finally {
     running.server.close();
-  }
-}
-
-/**
- * The redirect URI is derived from the port this server bound, so a stale LINKEDIN_REDIRECT_URI
- * can no longer point the browser somewhere nothing is listening — but LinkedIn still rejects
- * the flow unless the app registers the URI below, so say it out loud.
- */
-function warnAboutRedirectUri(redirectUri: string): void {
-  const configured = process.env.LINKEDIN_REDIRECT_URI;
-  if (configured && configured !== redirectUri) {
-    console.error(`! LINKEDIN_REDIRECT_URI is ${configured}`);
-    console.error(`! This server answers ${redirectUri} — register that one in the LinkedIn app.`);
   }
 }
 

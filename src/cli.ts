@@ -76,8 +76,11 @@ program
   .option("-d, --dir <dir>", "directory holding the Markdown posts", "posts")
   .action(async (o: { port: string; dir: string }) => {
     const running = await startServer({ port: parsePort(o.port), dir: o.dir });
-    console.log(`serving  ${running.url}  (${o.dir})`);
+    console.log(`listening  127.0.0.1:${running.port}  (${o.dir})`);
+    if (running.address.proxied) console.log(`proxied as ${running.url} — forward it to port ${running.port}`);
+    console.log(`posts      ${running.url}/`);
     console.log(`authorize  ${running.url}/auth/linkedin`);
+    console.log(`callback   ${running.address.redirectUri}  ← register this in the LinkedIn app`);
   });
 
 program
