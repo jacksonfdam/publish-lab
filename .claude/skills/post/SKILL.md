@@ -30,6 +30,14 @@ Read `references/voice.md` before writing the first draft in a session. Then:
 - Code blocks always have a language tag. Commands show expected output when it matters.
 - `linkedin_teaser`: 600–1100 characters, plain text, no Markdown, no hashtag walls (≤ 3 hashtags at the end). Open with the concrete result or the surprising part, not "Excited to share". End with a question or a pointer to the repo. The CLI attaches the canonical URL automatically — do not paste the URL into the teaser.
 - `description`: ≤ 160 characters, used as meta description and the LinkedIn card subtitle.
+- Social teasers: write each one for its own network rather than pasting the same sentence five times. Limits and link budgets are in `references/frontmatter.md`.
+  - `medium_subtitle` — the second half of the headline. It completes the title, it does not repeat it.
+  - `twitter_teaser` — one claim, the sharpest one in the article. No thread, no "a 🧵", no build-up.
+  - `threads_teaser` — conversational, two or three short lines, ends on something someone can reply to.
+  - `bluesky_teaser` — drier and more technical than Threads; that audience reads the code.
+  - `hashtags` — 3–5, stored without the `#`, reused across networks. Not the same list as `tags` unless it happens to be right.
+  - `hero_prompt` — a prompt for the cover image: subject, composition, palette, and what to leave out. No text or logos in the image.
+- Run `npm run dev -- teasers posts/<slug>.md` after writing. It prints character counts and exits non-zero on anything over its limit. If you are short on time, `--write` derives drafts from `description`, but derived copy is a placeholder — replace it.
 
 Write the file, then reply with: the angle in one line, the file path, and 2–3 things the user should double-check (claims you couldn't verify, numbers to fill in, image placeholders).
 
