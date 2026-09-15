@@ -18,6 +18,12 @@ export interface PostMeta {
   canonical_url?: string;
   cover?: string;
   linkedin_teaser?: string;
+  medium_subtitle?: string;
+  twitter_teaser?: string;
+  threads_teaser?: string;
+  bluesky_teaser?: string;
+  hashtags?: string[];
+  hero_prompt?: string;
   targets?: Target[];
   published?: Partial<Record<Target, PublishRecord>>;
 }
