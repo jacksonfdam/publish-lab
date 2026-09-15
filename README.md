@@ -75,6 +75,17 @@ With no `--source-url` the fetch address falls back to `canonical_url`, then the
 
 Medium sets the imported story's canonical to whatever URL it fetched from. Importing from a tunnel means the story points at an address that dies with the tunnel; fix it in the story settings once the article has a real home.
 
+### Writing a LinkedIn Article
+
+LinkedIn has no write API for Articles. The long-form `/pulse` format is authored in their editor and nothing else — `w_member_social`, which the `linkedin` target uses, creates feed posts. So an Article is select-all, copy, paste from `/article/<slug>?for=linkedin`.
+
+That view exists because two things are lost on the way in, and one of them is content:
+
+- **Links inside headings are dropped.** A heading ending in `· [name](url)` keeps `· name` and gets the link back as a paragraph beneath it, where the editor preserves it.
+- **The leading `# Title` is stripped**, because LinkedIn takes the title in its own field.
+
+Inline code has no equivalent there and pastes as plain text. Tables do not survive; avoid them in a post you plan to put on LinkedIn.
+
 ## Social teasers
 
 Each post carries its own copy per network, so nothing gets improvised in someone else's editor at publish time:
@@ -116,6 +127,7 @@ npm run dev -- serve --port 5000 --dir drafts
 | `/` | Every post in `posts/` with status, targets and publish state |
 | `/post/<slug>` | The rendered article, front matter, and the teasers with character counts |
 | `/article/<slug>` | The same post with nothing around it, for Medium's importer to scrape |
+| `/article/<slug>?for=linkedin` | The same page adjusted for pasting into LinkedIn's Article editor |
 | `/auth/linkedin` | Starts the LinkedIn flow |
 | `/auth/linkedin/callback` | Receives the code and writes `.tokens/linkedin.json` |
 
