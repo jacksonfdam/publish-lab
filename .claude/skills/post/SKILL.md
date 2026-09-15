@@ -47,7 +47,7 @@ Only when the user asks to publish, or says the draft is final:
 
 1. Confirm `status: published` in front matter (set it if they said "publish").
 2. Run `npm run dev -- publish posts/<slug>.md --dry-run` and show the plan.
-3. Run it for real. If LinkedIn auth fails with 401, run `npm run auth:linkedin` and retry — tokens expire every ~60 days.
+3. Run it for real. If LinkedIn auth fails with 401, run `npm run auth:linkedin` and retry — tokens expire every ~60 days. That opens the browser against the local server on port 4000; if `npm run serve` is already holding the port, authorize at `http://localhost:4000/auth/linkedin` instead.
 4. Medium: unless `MEDIUM_TOKEN` is set, the CLI opens Medium's import tool in the browser; tell the user to click **Import** and then **Publish** there — that step is manual by design.
 5. Report the URLs written into `published:`.
 
