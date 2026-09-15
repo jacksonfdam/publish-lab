@@ -1,6 +1,5 @@
-import http from "node:http";
 import { marked } from "marked";
-import { listPosts, findPostBySlug, POSTS_DIR, type PostListing } from "./posts.js";
+import { type PostListing } from "./posts.js";
 import { TEASER_LIMITS, checkTeasers, type TeaserField } from "./teasers.js";
 import type { Post } from "./frontmatter.js";
 
@@ -9,48 +8,7 @@ const STATUS_ORDER = ["idea", "draft", "review", "published"] as const;
 // Rendered in their own table below, with character counts.
 const TEASER_FIELDS = new Set([...Object.keys(TEASER_LIMITS), "hashtags", "hero_prompt"]);
 
-export interface PreviewOptions {
-  port?: number;
-  dir?: string;
-}
-
-/**
- * Serves `posts/` as HTML on localhost so a draft can be read before it is published
- * anywhere. Files are read per request: edit the Markdown, refresh, done.
- */
-export function startPreviewServer(opts: PreviewOptions = {}): Promise<http.Server> {
-  const port = opts.port ?? 4000;
-  const dir = opts.dir ?? POSTS_DIR;
-
-  const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url ?? "/", "http://localhost");
-
-    try {
-      if (url.pathname === "/") return send(res, 200, renderIndex(listPosts(dir), dir));
-
-      const slug = url.pathname.startsWith("/post/") ? decodeURIComponent(url.pathname.slice("/post/".length)) : null;
-      if (slug) {
-        const post = findPostBySlug(slug, dir);
-        if (!post) return send(res, 404, page("Not found", `<p>No post with slug <code>${esc(slug)}</code>.</p>`));
-        return send(res, 200, await renderPost(post));
-      }
-
-      send(res, 404, page("Not found", "<p>Nothing here.</p>"));
-    } catch (e) {
-      send(res, 500, page("Error", `<pre>${esc((e as Error).message)}</pre>`));
-    }
-  });
-
-  return new Promise((resolve) => {
-    // Localhost only: these are unpublished drafts, they have no business on the network.
-    server.listen(port, "127.0.0.1", () => {
-      console.log(`preview  http://localhost:${port}  (${dir})`);
-      resolve(server);
-    });
-  });
-}
-
-function renderIndex({ posts, broken }: PostListing, dir: string): string {
+export function renderIndex({ posts, broken }: PostListing, dir: string): string {
   const sorted = [...posts].sort(
     (a, b) => STATUS_ORDER.indexOf(b.meta.status) - STATUS_ORDER.indexOf(a.meta.status) || a.meta.slug.localeCompare(b.meta.slug),
   );
@@ -80,7 +38,7 @@ function renderIndex({ posts, broken }: PostListing, dir: string): string {
   return page("publish-lab", body);
 }
 
-async function renderPost(post: Post): Promise<string> {
+export async function renderPost(post: Post): Promise<string> {
   const rows = Object.entries(post.meta)
     .filter(([k]) => !TEASER_FIELDS.has(k))
     .filter(([, v]) => v !== undefined && !(Array.isArray(v) && v.length === 0) && !(isPlainObject(v) && Object.keys(v).length === 0))
@@ -139,16 +97,11 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-function esc(s: string): string {
+export function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
-function send(res: http.ServerResponse, code: number, html: string): void {
-  res.writeHead(code, { "content-type": "text/html; charset=utf-8" });
-  res.end(html);
-}
-
-function page(title: string, body: string): string {
+export function page(title: string, body: string): string {
   return `<!doctype html>
 <html lang="en">
 <head>

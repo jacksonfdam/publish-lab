@@ -8,7 +8,8 @@
     "build": "tsc",
     "dev": "tsx src/cli.ts",
     "auth:linkedin": "tsx src/cli.ts auth linkedin",
-    "preview": "tsx src/cli.ts preview",
+    "serve": "tsx src/cli.ts serve",
+    "preview": "tsx src/cli.ts serve",
     "mcp": "tsx src/mcp.ts",
     "typecheck": "tsc --noEmit"
   },
