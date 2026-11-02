@@ -13,7 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20 }
+        # Node 26 is Active LTS and patched for CVE-2026-111497 (Brotli RCE); Node 20 is EOL.
+        with: { node-version: 26 }
       - run: npm ci
       - name: Publish new posts to dev.to
         env:
