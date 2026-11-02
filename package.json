@@ -27,6 +27,6 @@
     "tsx": "^4.23.13",
     "typescript": "^7.0.2"
   },
-  "engines": { "node": ">=20" },
+  "engines": { "node": ">=22.0.0" },
   "license": "MIT"
 }
